@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>深呼吸サポート</title>
+  <style>
+    /* パニック時にも目に優しい落ち着いた配色 */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    body {
+      background-color: #e0f2fe; /* 落ち着いた淡いブルー */
+      color: #1e3a8a;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+      height: 100vh;
+      padding: 40px 20px;
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+
+    /* メッセージエリア */
+    .message-container {
+      text-align: center;
+      margin-top: 20px;
+    }
+
+    .main-message {
+      font-size: 1.5rem;
+      font-weight: bold;
+      margin-bottom: 12px;
+      line-height: 1.4;
+      min-height: 2.8em;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .sub-message {
+      font-size: 1.2rem;
+      color: #2563eb;
+      font-weight: 700;
+    }
+
+    /* 円のアニメーションエリア */
+    .circle-container {
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 250px;
+      height: 250px;
+    }
+
+    /* 外側の誘導用リング */
+    .guide-ring {
+      position: absolute;
+      width: 220px;
+      height: 220px;
+      border: 3px dashed #93c5fd;
+      border-radius: 50%;
+    }
+
+    /* 伸縮する円（CSSアニメーション・transitionは一切使用しない） */
+    .breathing-circle {
+      width: 220px;
+      height: 220px;
+      background: linear-gradient(135deg, #60a5fa, #3b82f6);
+      border-radius: 50%;
+      box-shadow: 0 10px 25px rgba(59, 130, 246, 0.3);
+      /* 初期状態は最大サイズ。JavaScriptで直接制御する */
+      transform: scale(1);
+      will-change: transform; /* ブラウザにアニメーションの準備をさせる */
+    }
+
+    /* 下部テキスト */
+    .footer-note {
+      font-size: 0.9rem;
+      color: #64748b;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- メッセージ表示部 -->
+  <div class="message-container">
+    <div class="main-message" id="mainMessage">大丈夫、ここは安全ですよ</div>
+    <div class="sub-message" id="subMessage">口から息をはく（6秒）</div>
+  </div>
+
+  <!-- 深呼吸アニメーション部 -->
+  <div class="circle-container">
+    <div class="guide-ring"></div>
+    <div class="breathing-circle" id="circle"></div>
+  </div>
+
+  <!-- 下部テキスト -->
+  <div class="footer-note">
+    画面の動きに合わせてゆっくり整えましょう
+  </div>
+
+  <script>
+    const circle = document.getElementById('circle');
+    const mainMessage = document.getElementById('mainMessage');
+    const subMessage = document.getElementById('subMessage');
+
+    // 安心メッセージリスト
+    const messages = [
+      "大丈夫、ここは安全ですよ",
+      "このパニック症状は必ず治まります",
+      "体の力を抜いて、リラックス...",
+      "焦らなくて大丈夫。そのままで大丈夫です",
+      "ゆっくり波に合わせていきましょう"
+    ];
+
+    let messageIndex = 0;
+    let startTime;
+    const exhaleTime = 6000; // 吐く（6秒）
+    const inhaleTime = 4000; // 吸う（4秒）
+    const totalCycleTime = exhaleTime + inhaleTime; // 1周期（10秒）
+
+    // イージング関数（動きを滑らかにする魔法の数式：easeInOutQuad）
+    // t: 現在の時間(0~1), b: 開始値, c: 変化量, d: 所要時間(1)
+    function easeInOutQuad(t, b, c, d) {
+      t /= d/2;
+      if (t < 1) return c/2*t*t + b;
+      t--;
+      return -c/2 * (t*(t-2) - 1) + b;
+    }
+
+    // アニメーションのメインループ
+    function animateBreathing(timestamp) {
+      if (!startTime) startTime = timestamp;
+      const runtime = timestamp - startTime;
+      
+      // 現在の周期内の時間を算出（0〜10000ミリ秒）
+      const relativeTime = runtime % totalCycleTime;
+
+      let currentScale;
+
+      if (relativeTime < exhaleTime) {
+        // --- 息を吐くフェーズ（0秒〜6秒） ---
+        // メッセージ更新（フェーズ切り替わり時のみ）
+        if (subMessage.innerText !== "口から息をはく（6秒）") {
+          subMessage.innerText = "口から息をはく（6秒）";
+          // 2回目以降の「吐く」の時にメインメッセージを更新
+          if (runtime > totalCycleTime) {
+            messageIndex = (messageIndex + 1) % messages.length;
+            mainMessage.innerText = messages[messageIndex];
+          }
+        }
+        
+        // 1.0 から 0.45 への縮小アニメーション
+        const progress = relativeTime / exhaleTime; // 0〜1
+        const easedProgress = easeInOutQuad(progress, 0, 1, 1);
+        currentScale = 1 - (easedProgress * (1 - 0.45));
+
+      } else {
+        // --- 息を吸うフェーズ（6秒〜10秒） ---
+        // メッセージ更新（フェーズ切り替わり時のみ）
+        if (subMessage.innerText !== "鼻から息をすう（4秒）") {
+          subMessage.innerText = "鼻から息をすう（4秒）";
+        }
+
+        // 0.45 から 1.0 への拡大アニメーション
+        const inhaleRelativeTime = relativeTime - exhaleTime; // 0〜4000
+        const progress = inhaleRelativeTime / inhaleTime; // 0〜1
+        const easedProgress = easeInOutQuad(progress, 0, 1, 1);
+        currentScale = 0.45 + (easedProgress * (1 - 0.45));
+      }
+
+      // 計算された現在の大きさを円に適用
+      circle.style.transform = `scale(${currentScale})`;
+
+      // 次のフレームを描画
+      requestAnimationFrame(animateBreathing);
+    }
+
+    // アニメーション開始
+    requestAnimationFrame(animateBreathing);
+
+  </script>
+</body>
+</html>
